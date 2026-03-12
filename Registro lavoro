@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <link rel="manifest" href="manifest.json">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro Lavoro Davis</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 15px; background: #f0f2f5; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        h2 { margin-top: 0; font-size: 1.1rem; color: #0056b3; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.85rem; }
+        select, input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        .grid { display: flex; gap: 10px; margin-top: 15px; }
+        button { flex: 1; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        .btn-green { background: #28a745; color: white; }
+        .btn-red { background: #dc3545; color: white; }
+        .btn-blue { background: #007bff; color: white; width: 100%; margin-bottom: 10px; }
+        .btn-orange { background: #ffc107; color: black; display: none; width: 100%; margin-top: 10px; }
+        .log-item { background: #fff; padding: 10px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 10px; }
+        .btn-sm-edit { color: #007bff; background: none; border: 1px solid #007bff; padding: 4px 8px; font-size: 0.75rem; margin-top: 5px; flex: none; width: auto; }
+        .btn-sm-del { color: #dc3545; background: none; border: 1px solid #dc3545; padding: 4px 8px; font-size: 0.75rem; margin-left: 5px; flex: none; width: auto; }
+        .total-banner { font-size: 1.1rem; font-weight: bold; color: #28a745; text-align: center; padding: 10px; background: #e9f7ef; border-radius: 8px; margin-bottom: 10px; }
+        .commessa-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2 id="titolo-form">Registra Lavoro</h2>
+        
+        <label>Commessa:</label>
+        <select id="sel-commessa"></select>
+        
+        <label>Tipo di Lavoro:</label>
+        <select id="sel-lavoro">
+            <option>PANTOGRAFO</option><option>IMBALLAGGIO</option><option>SEZIONATRICE</option>
+            <option>MONTAGGIO</option><option>MAGAZZINO</option><option>TRASPORTO</option>
+        </select>
+
+        <label id="lbl-inizio">Inizio:</label>
+        <input type="datetime-local" id="ora-inizio">
+        
+        <div id="box-fine" style="display:none;">
+            <label>Fine:</label>
+            <input type="datetime-local" id="ora-fine">
+        </div>
+
+        <div class="grid" id="controlli-standard">
+            <button class="btn-green" onclick="faiInizia()">INIZIA</button>
+            <button class="btn-red" onclick="faiFine()">FINE</button>
+        </div>
+        
+        <button id="btn-conferma" class="btn-orange" onclick="salvaManualeOModifica()">CONFERMA</button>
+        <button id="btn-annulla" style="display:none; background:#ccc; margin-top:5px;" onclick="resetPagina()">Annulla</button>
+        
+        <p id="msg-stato" style="color: orange; font-weight: bold; margin-top: 10px;"></p>
+    </div>
+
+    <div class="card">
+        <h2>Riepilogo Lavorazioni</h2>
+        <button class="btn-blue" onclick="attivaInserimentoManuale()">+ AGGIUNGI LAVORO PASSATO</button>
+        <div class="total-banner" id="display-totale">Oggi: 0h 0m</div>
+        <div id="lista-log"></div>
+    </div>
+
+    <div class="card">
+        <h2>Gestione Commesse</h2>
+        <input type="text" id="nuovo-nome" placeholder="Nome commessa...">
+        <button class="btn-blue" style="margin-top:5px;" onclick="aggiungiNome()">Aggiungi</button>
+        <div id="elenco-nomi" style="margin-top:10px; max-height:100px; overflow-y:auto;"></div>
+    </div>
+
+    <script>
+        let nomi = JSON.parse(localStorage.getItem('nomi')) || ['Commessa A'];
+        let registro = JSON.parse(localStorage.getItem('registro')) || [];
+        let inCorso = JSON.parse(localStorage.getItem('inCorso')) || null;
+        let idModifica = null;
+
+        function init() {
+            disegnaNomi();
+            disegnaRegistro();
+            aggiornaOra();
+            if(inCorso) document.getElementById('msg-stato').innerText = "Lavoro attivo: " + inCorso.c;
+        }
+
+        function aggiornaOra() {
+            const ora = new Date();
+            ora.setMinutes(ora.getMinutes() - ora.getTimezoneOffset());
+            document.getElementById('ora-inizio').value = ora.toISOString().slice(0, 16);
+        }
+
+        function disegnaNomi() {
+            const sel = document.getElementById('sel-commessa');
+            const lista = document.getElementById('elenco-nomi');
+            sel.innerHTML = ""; lista.innerHTML = "";
+            nomi.forEach((n, i) => {
+                sel.innerHTML += `<option value="${n}">${n}</option>`;
+                lista.innerHTML += `<div class="commessa-row">${n} <button class="btn-sm-del" onclick="eliminaNome(${i})">X</button></div>`;
+            });
+        }
+
+        function aggiungiNome() {
+            const n = document.getElementById('nuovo-nome').value.trim();
+            if(n) { nomi.push(n); localStorage.setItem('nomi', JSON.stringify(nomi)); disegnaNomi(); document.getElementById('nuovo-nome').value=""; }
+        }
+
+        function eliminaNome(i) { nomi.splice(i,1); localStorage.setItem('nomi', JSON.stringify(nomi)); disegnaNomi(); }
+
+        function faiInizia() {
+            inCorso = { c: document.getElementById('sel-commessa').value, l: document.getElementById('sel-lavoro').value, i: document.getElementById('ora-inizio').value };
+            localStorage.setItem('inCorso', JSON.stringify(inCorso));
+            document.getElementById('msg-stato').innerText = "Lavoro attivo: " + inCorso.c;
+            alert("Iniziato!");
+        }
+
+        function faiFine() {
+            if(!inCorso) return alert("Avvia prima un lavoro!");
+            const fine = document.getElementById('ora-inizio').value;
+            const inizio = inCorso.i;
+            const diff = (new Date(fine) - new Date(inizio)) / 60000;
+            registro.push({ c: inCorso.c, l: inCorso.l, i: inizio, f: fine, d: Math.floor(diff) });
+            localStorage.setItem('registro', JSON.stringify(registro));
+            localStorage.removeItem('inCorso');
+            inCorso = null;
+            document.getElementById('msg-stato').innerText = "";
+            disegnaRegistro();
+        }
+
+        function disegnaRegistro() {
+            const div = document.getElementById('lista-log');
+            div.innerHTML = "";
+            let minOggi = 0;
+            const oggi = new Date().toLocaleDateString();
+
+            registro.slice().reverse().forEach((r, i) => {
+                const idx = registro.length - 1 - i;
+                const dI = new Date(r.i);
+                if(dI.toLocaleDateString() === oggi) minOggi += r.d;
+                div.innerHTML += `
+                    <div class="log-item">
+                        <strong>${r.c}</strong> - ${r.l}<br>
+                        <small>${dI.toLocaleDateString()} | ${dI.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} -> ${new Date(r.f).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</small><br>
+                        <b>${Math.floor(r.d/60)}h ${r.d%60}m</b><br>
+                        <button class="btn-sm-edit" onclick="attivaModifica(${idx})">MODIFICA</button>
+                        <button class="btn-sm-del" onclick="eliminaLog(${idx})">ELIMINA</button>
+                    </div>`;
+            });
+            document.getElementById('display-totale').innerText = `Oggi: ${Math.floor(minOggi/60)}h ${minOggi%60}m`;
+        }
+
+        function attivaInserimentoManuale() {
+            idModifica = "NUOVO";
+            document.getElementById('titolo-form').innerText = "AGGIUNGI PASSATO";
+            document.getElementById('box-fine').style.display = "block";
+            document.getElementById('controlli-standard').style.display = "none";
+            document.getElementById('btn-conferma').style.display = "block";
+            document.getElementById('btn-annulla').style.display = "block";
+            window.scrollTo(0,0);
+        }
+
+        function attivaModifica(idx) {
+            idModifica = idx;
+            const r = registro[idx];
+            document.getElementById('titolo-form').innerText = "MODIFICA RECORD";
+            document.getElementById('sel-commessa').value = r.c;
+            document.getElementById('sel-lavoro').value = r.l;
+            document.getElementById('ora-inizio').value = r.i;
+            document.getElementById('ora-fine').value = r.f;
+            document.getElementById('box-fine').style.display = "block";
+            document.getElementById('controlli-standard').style.display = "none";
+            document.getElementById('btn-conferma').style.display = "block";
+            document.getElementById('btn-annulla').style.display = "block";
+            window.scrollTo(0,0);
+        }
+
+        function salvaManualeOModifica() {
+            const i = document.getElementById('ora-inizio').value;
+            const f = document.getElementById('ora-fine').value;
+            const diff = Math.floor((new Date(f) - new Date(i)) / 60000);
+            const dati = { c: document.getElementById('sel-commessa').value, l: document.getElementById('sel-lavoro').value, i: i, f: f, d: diff };
+            
+            if(idModifica === "NUOVO") registro.push(dati);
+            else registro[idModifica] = dati;
+
+            localStorage.setItem('registro', JSON.stringify(registro));
+            resetPagina();
+            disegnaRegistro();
+        }
+
+        function resetPagina() {
+            idModifica = null;
+            document.getElementById('titolo-form').innerText = "Registra Lavoro";
+            document.getElementById('box-fine').style.display = "none";
+            document.getElementById('controlli-standard').style.display = "flex";
+            document.getElementById('btn-conferma').style.display = "none";
+            document.getElementById('btn-annulla').style.display = "none";
+            aggiornaOra();
+        }
+
+        function eliminaLog(i) { if(confirm("Eliminare?")) { registro.splice(i,1); localStorage.setItem('registro', JSON.stringify(registro)); disegnaRegistro(); } }
+
+        init();
+    </script>
+</body>
+</html>
